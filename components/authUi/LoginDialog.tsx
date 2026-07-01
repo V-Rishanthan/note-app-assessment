@@ -1,6 +1,8 @@
 "use client";
 
-import { useState, ChangeEvent, FormEvent } from "react";
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { signIn } from "next-auth/react";
 import {
   Dialog,
   DialogContent,
@@ -12,7 +14,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { LogIn, Eye, EyeOff } from "lucide-react";
+import { LogIn, Eye, EyeOff, Loader2 } from "lucide-react";
 
 interface FormData {
   name: string;
@@ -27,10 +29,12 @@ interface Errors {
 }
 
 export default function LoginDialog() {
+  const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [isLogin, setIsLogin] = useState(true);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
   const [formData, setFormData] = useState<FormData>({
     name: "",
@@ -44,23 +48,21 @@ export default function LoginDialog() {
     password: "",
   });
 
-  function handleChange(e: ChangeEvent<HTMLInputElement>) {
+  function handleChange(e: any) {
     const { name, value } = e.target;
-
     setFormData((prev) => ({
       ...prev,
       [name]: value,
     }));
-
     setErrors((prev) => ({
       ...prev,
       [name]: "",
     }));
+    setError("");
   }
 
   function validateForm(): boolean {
     let isValid = true;
-
     const newErrors: Errors = {
       name: "",
       email: "",
@@ -94,6 +96,7 @@ export default function LoginDialog() {
 
   async function handleSubmit(e: any) {
     e.preventDefault();
+    setError("");
 
     if (!validateForm()) return;
 
@@ -101,23 +104,24 @@ export default function LoginDialog() {
 
     try {
       if (isLogin) {
-        const response = await fetch("/api/auth/login", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            email: formData.email,
-            password: formData.password,
-          }),
+        const result = await signIn("credentials", {
+          redirect: false,
+          email: formData.email,
+          password: formData.password,
         });
 
-        const data = await response.json().catch(() => null);
-        if (!response.ok) {
-          alert(data?.message || "Invalid email or password");
+        if (result?.error) {
+          setError("Invalid email or password");
+          setLoading(false);
           return;
         }
 
-        alert("Login successful!");
         setIsOpen(false);
+        setFormData({ name: "", email: "", password: "" });
+        setErrors({ name: "", email: "", password: "" });
+        router.push("/");
+        router.refresh();
+        setTimeout(() => window.location.reload(), 500);
       } else {
         const response = await fetch("/api/auth/register", {
           method: "POST",
@@ -128,19 +132,31 @@ export default function LoginDialog() {
         const data = await response.json();
 
         if (!response.ok) {
-          alert(data.message || "Signup failed");
+          setError(data.message || "Signup failed");
+          setLoading(false);
           return;
         }
 
-        alert("Account created successfully!");
-        setIsLogin(true);
-        setIsOpen(false);
-      }
+        const result = await signIn("credentials", {
+          redirect: false,
+          email: formData.email,
+          password: formData.password,
+        });
 
-      setFormData({ name: "", email: "", password: "" });
-      setErrors({ name: "", email: "", password: "" });
+        if (result?.error) {
+          setError("Account created but login failed. Please try logging in.");
+          setLoading(false);
+          return;
+        }
+
+        setIsOpen(false);
+        setFormData({ name: "", email: "", password: "" });
+        setErrors({ name: "", email: "", password: "" });
+        router.refresh();
+        setTimeout(() => window.location.reload(), 500);
+      }
     } catch (error) {
-      alert("Something went wrong");
+      setError("Something went wrong. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -150,12 +166,18 @@ export default function LoginDialog() {
     setShowPassword((prev) => !prev);
   }
 
+  function switchMode(mode: boolean) {
+    setIsLogin(mode);
+    setError("");
+    setErrors({ name: "", email: "", password: "" });
+    setFormData({ name: "", email: "", password: "" });
+  }
+
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
         <Button className="px-8 py-2.5 rounded-full bg-white text-black hover:bg-gray-100 flex items-center gap-2 border-0 shadow-none">
-          <LogIn size={18} />
-          Login
+          <LogIn size={18} /> Login
         </Button>
       </DialogTrigger>
 
@@ -172,6 +194,12 @@ export default function LoginDialog() {
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-5">
+          {error && (
+            <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg text-sm">
+              {error}
+            </div>
+          )}
+
           {!isLogin && (
             <div className="space-y-2">
               <Label>Full Name</Label>
@@ -179,7 +207,10 @@ export default function LoginDialog() {
                 name="name"
                 value={formData.name}
                 onChange={handleChange}
-                className="h-11 bg-gray-50 border-0"
+                disabled={loading}
+                className={`h-11 bg-gray-50 border-0 ${
+                  errors.name ? "ring-2 ring-red-500" : ""
+                }`}
               />
               {errors.name && (
                 <p className="text-sm text-red-500">{errors.name}</p>
@@ -191,9 +222,13 @@ export default function LoginDialog() {
             <Label>Email Address</Label>
             <Input
               name="email"
+              type="email"
               value={formData.email}
               onChange={handleChange}
-              className="h-11 bg-gray-50 border-0"
+              disabled={loading}
+              className={`h-11 bg-gray-50 border-0 ${
+                errors.email ? "ring-2 ring-red-500" : ""
+              }`}
             />
             {errors.email && (
               <p className="text-sm text-red-500">{errors.email}</p>
@@ -202,25 +237,26 @@ export default function LoginDialog() {
 
           <div className="space-y-2">
             <Label>Password</Label>
-
             <div className="relative">
               <Input
                 name="password"
                 type={showPassword ? "text" : "password"}
                 value={formData.password}
                 onChange={handleChange}
-                className="h-11 bg-gray-50 border-0 pr-10"
+                disabled={loading}
+                className={`h-11 bg-gray-50 border-0 pr-10 ${
+                  errors.password ? "ring-2 ring-red-500" : ""
+                }`}
               />
-
               <button
                 type="button"
                 onClick={togglePasswordVisibility}
-                className="absolute right-3 top-1/2 -translate-y-1/2"
+                disabled={loading}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
               >
                 {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
               </button>
             </div>
-
             {errors.password && (
               <p className="text-sm text-red-500">{errors.password}</p>
             )}
@@ -229,9 +265,18 @@ export default function LoginDialog() {
           <Button
             type="submit"
             disabled={loading}
-            className="w-full h-11 bg-indigo-500 hover:bg-indigo-600 text-white rounded-full"
+            className="w-full h-11 bg-indigo-500 hover:bg-indigo-600 text-white rounded-full disabled:opacity-50"
           >
-            {loading ? "Loading..." : isLogin ? "Login" : "Create Account"}
+            {loading ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                {isLogin ? "Logging in..." : "Creating account..."}
+              </>
+            ) : isLogin ? (
+              "Login"
+            ) : (
+              "Create Account"
+            )}
           </Button>
 
           <div className="text-center text-sm">
@@ -240,8 +285,9 @@ export default function LoginDialog() {
                 Don't have an account?
                 <button
                   type="button"
-                  onClick={() => setIsLogin(false)}
-                  className="text-indigo-500"
+                  onClick={() => switchMode(false)}
+                  disabled={loading}
+                  className="text-indigo-500 hover:underline"
                 >
                   Sign Up
                 </button>
@@ -251,8 +297,9 @@ export default function LoginDialog() {
                 Already have an account?
                 <button
                   type="button"
-                  onClick={() => setIsLogin(true)}
-                  className="text-indigo-500"
+                  onClick={() => switchMode(true)}
+                  disabled={loading}
+                  className="text-indigo-500 hover:underline"
                 >
                   Login
                 </button>

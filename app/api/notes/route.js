@@ -1,23 +1,24 @@
 import connectDB from "@/lib/db/mongodb";
 import Note from "@/lib/db/models/Note";
-import User from "@/lib/db/models/User";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth/authOptions";
 
-// Create a new note
+// Create new note
 export async function POST(request) {
   try {
     await connectDB();
 
-    const body = await request.json();
-    const { title, description, userEmail } = body;
+    const session = await getServerSession(authOptions);
 
-    // Optional userId: if userEmail provided, look up the user and attach id.
-    let userId = undefined;
-    if (userEmail) {
-      const user = await User.findOne({
-        email: String(userEmail).toLowerCase().trim(),
-      });
-      if (user) userId = user._id;
+    if (!session) {
+      return Response.json(
+        { success: false, message: "Unauthorized - Please login" },
+        { status: 401 },
+      );
     }
+
+    const body = await request.json();
+    const { title, description } = body;
 
     if (!title || !description) {
       return Response.json(
@@ -26,10 +27,11 @@ export async function POST(request) {
       );
     }
 
-    const createPayload = { title, description };
-    if (userId) createPayload.userId = userId;
-
-    const note = await Note.create(createPayload);
+    const note = await Note.create({
+      title,
+      description,
+      userId: session.user.id,
+    });
 
     return Response.json(
       {
@@ -42,7 +44,109 @@ export async function POST(request) {
   } catch (error) {
     console.error("Error creating note:", error);
     return Response.json(
-      { success: false, message: "Failed to create note: " + error.message },
+      { success: false, message: "Failed to create note" },
+      { status: 500 },
+    );
+  }
+}
+
+// Update an existing note
+export async function PATCH(request) {
+  try {
+    await connectDB();
+
+    const session = await getServerSession(authOptions);
+
+    if (!session) {
+      return Response.json(
+        { success: false, message: "Unauthorized - Please login" },
+        { status: 401 },
+      );
+    }
+
+    const body = await request.json();
+    const { id, title, description } = body;
+
+    if (!id || !title || !description) {
+      return Response.json(
+        {
+          success: false,
+          message: "Note id, title, and description are required",
+        },
+        { status: 400 },
+      );
+    }
+
+    const note = await Note.findOneAndUpdate(
+      { _id: id, userId: session.user.id },
+      { title, description, updatedAt: new Date() },
+      { new: true },
+    );
+
+    if (!note) {
+      return Response.json(
+        { success: false, message: "Note not found" },
+        { status: 404 },
+      );
+    }
+
+    return Response.json(
+      { success: true, data: note, message: "Note updated" },
+      { status: 200 },
+    );
+  } catch (error) {
+    console.error("Error updating note:", error);
+    return Response.json(
+      { success: false, message: "Failed to update note" },
+      { status: 500 },
+    );
+  }
+}
+
+// Delete a note
+export async function DELETE(request) {
+  try {
+    await connectDB();
+
+    const session = await getServerSession(authOptions);
+
+    if (!session) {
+      return Response.json(
+        { success: false, message: "Unauthorized - Please login" },
+        { status: 401 },
+      );
+    }
+
+    const body = await request.json();
+    const { id } = body;
+
+    if (!id) {
+      return Response.json(
+        { success: false, message: "Note id is required" },
+        { status: 400 },
+      );
+    }
+
+    const note = await Note.findOneAndDelete({
+      _id: id,
+      userId: session.user.id,
+    });
+
+    if (!note) {
+      return Response.json(
+        { success: false, message: "Note not found" },
+        { status: 404 },
+      );
+    }
+
+    return Response.json(
+      { success: true, message: "Note deleted" },
+      { status: 200 },
+    );
+  } catch (error) {
+    console.error("Error deleting note:", error);
+    return Response.json(
+      { success: false, message: "Failed to delete note" },
       { status: 500 },
     );
   }
@@ -53,38 +157,23 @@ export async function GET(request) {
   try {
     await connectDB();
 
-    const { searchParams } = new URL(request.url);
-    const page = parseInt(searchParams.get("page")) || 1;
-    const limit = parseInt(searchParams.get("limit")) || 10;
-    const skip = (page - 1) * limit;
+    const session = await getServerSession(authOptions);
 
-    const userEmail = searchParams.get("userEmail");
-    let filter = {};
-    if (userEmail) {
-      const user = await User.findOne({
-        email: String(userEmail).toLowerCase().trim(),
-      });
-      if (user) filter.userId = user._id;
-      else filter.userId = null; // no results
+    if (!session) {
+      return Response.json(
+        { success: false, message: "Unauthorized - Please login" },
+        { status: 401 },
+      );
     }
 
-    const notes = await Note.find(filter)
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limit);
-
-    const total = await Note.countDocuments(filter);
+    const notes = await Note.find({ userId: session.user.id }).sort({
+      createdAt: -1,
+    });
 
     return Response.json({
       success: true,
       data: notes,
-      pagination: {
-        page,
-        limit,
-        total,
-        pages: Math.ceil(total / limit),
-        hasMore: page * limit < total,
-      },
+      total: notes.length,
     });
   } catch (error) {
     console.error("Error fetching notes:", error);

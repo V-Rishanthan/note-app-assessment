@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -13,12 +13,17 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, Loader2 } from "lucide-react";
+import { Plus, Loader2, Trash2 } from "lucide-react";
+
+interface FormData {
+  title: string;
+  description: string;
+}
 
 export default function AddNoteDialog() {
   const [isOpen, setIsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<FormData>({
     title: "",
     description: "",
   });
@@ -26,6 +31,34 @@ export default function AddNoteDialog() {
     title: "",
     description: "",
   });
+  const [editingId, setEditingId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const handleOpen = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      const note = customEvent.detail?.note;
+
+      if (note) {
+        setEditingId(note._id);
+        setFormData({ title: note.title, description: note.description });
+        setIsOpen(true);
+      }
+    };
+
+    window.addEventListener("open-note-dialog", handleOpen as EventListener);
+    return () => {
+      window.removeEventListener(
+        "open-note-dialog",
+        handleOpen as EventListener,
+      );
+    };
+  }, []);
+
+  function resetForm() {
+    setFormData({ title: "", description: "" });
+    setErrors({ title: "", description: "" });
+    setEditingId(null);
+  }
 
   function handleChange(e: any) {
     const { name, value } = e.target;
@@ -60,46 +93,85 @@ export default function AddNoteDialog() {
 
     setLoading(true);
 
-    try {
-      const payload = { ...formData };
+    const method = editingId ? "PATCH" : "POST";
+    const body: any = {
+      title: formData.title,
+      description: formData.description,
+    };
+    if (editingId) body.id = editingId;
 
+    try {
       const response = await fetch("/api/notes", {
-        method: "POST",
+        method,
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(body),
       });
 
-      let data = null;
-      try {
-        data = await response.json();
-      } catch (e) {
-        console.error("Invalid JSON response from /api/notes", e);
-      }
-
+      const data = await response.json();
       if (!response.ok) {
-        const msg =
-          data?.message || response.statusText || "Failed to create note";
-        console.error("/api/notes error:", response.status, msg, data);
-        alert(msg);
+        alert(data?.message || "Failed to save note");
         setLoading(false);
         return;
       }
 
-      alert("Note created successfully!");
+      alert(
+        editingId ? "Note updated successfully!" : "Note created successfully!",
+      );
       setIsOpen(false);
-      setFormData({ title: "", description: "" });
+      resetForm();
       window.location.reload();
     } catch (error) {
+      console.error(error);
       alert("Something went wrong");
+    } finally {
+      setLoading(false);
     }
+  }
 
-    setLoading(false);
+  async function handleDelete() {
+    if (!editingId) return;
+    if (!confirm("Delete this note?")) return;
+
+    setLoading(true);
+
+    try {
+      const response = await fetch("/api/notes", {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ id: editingId }),
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        alert(data?.message || "Failed to delete note");
+        setLoading(false);
+        return;
+      }
+
+      alert("Note deleted successfully!");
+      setIsOpen(false);
+      resetForm();
+      window.location.reload();
+    } catch (error) {
+      console.error(error);
+      alert("Something went wrong");
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
-    <Dialog open={isOpen} onOpenChange={setIsOpen}>
+    <Dialog
+      open={isOpen}
+      onOpenChange={(open) => {
+        if (!open) resetForm();
+        setIsOpen(open);
+      }}
+    >
       <DialogTrigger asChild>
         <button className="fixed bottom-8 right-8 bg-indigo-500 hover:bg-indigo-600 text-white p-4 rounded-full shadow-lg shadow-indigo-500/30 transition-all hover:scale-105 z-40">
           <Plus size={28} />
@@ -109,15 +181,16 @@ export default function AddNoteDialog() {
       <DialogContent className="sm:max-w-md p-6 border-0 shadow-lg">
         <DialogHeader className="mb-6">
           <DialogTitle className="text-2xl font-bold text-center">
-            Create New Note
+            {editingId ? "Edit Note" : "Create New Note"}
           </DialogTitle>
           <DialogDescription className="text-center mt-2">
-            Add a title and description for your new note
+            {editingId
+              ? "Update or delete this note"
+              : "Add a title and description for your new note"}
           </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-5">
-          {/* Title Field */}
           <div className="space-y-2">
             <Label htmlFor="title" className="text-sm font-medium">
               Title
@@ -139,7 +212,6 @@ export default function AddNoteDialog() {
             )}
           </div>
 
-          {/* Description Field */}
           <div className="space-y-2">
             <Label htmlFor="description" className="text-sm font-medium">
               Description
@@ -161,14 +233,22 @@ export default function AddNoteDialog() {
             )}
           </div>
 
-          {/* Buttons */}
           <div className="flex gap-3 pt-2">
+            {editingId && (
+              <Button
+                type="button"
+                onClick={handleDelete}
+                disabled={loading}
+                className="flex-1 h-11 bg-red-500 hover:bg-red-600 text-white rounded-full font-medium border-0 shadow-none"
+              >
+                <Trash2 className="mr-2 h-4 w-4" /> Delete
+              </Button>
+            )}
             <Button
               type="button"
               onClick={() => {
                 setIsOpen(false);
-                setFormData({ title: "", description: "" });
-                setErrors({ title: "", description: "" });
+                resetForm();
               }}
               disabled={loading}
               className="flex-1 h-11 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-full font-medium border-0 shadow-none"
@@ -185,6 +265,8 @@ export default function AddNoteDialog() {
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   Saving...
                 </>
+              ) : editingId ? (
+                "Save Changes"
               ) : (
                 "Save Note"
               )}

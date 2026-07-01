@@ -2,17 +2,26 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useSession, signOut } from "next-auth/react";
 import { Menu, X, Home, Package, StickyNote } from "lucide-react";
-import LoginDialog from "@/components/auth/LoginDialog";
+import LoginDialog from "@/components/authUi/LoginDialog";
 import FloatingAddButton from "@/components/common/FloatingAddButton";
 import NotesList from "@/components/NotesList";
 
 export default function HomePage() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const { data: session, status } = useSession();
+  //  Get user info from session
+  const user = session?.user;
+  const userName = user?.name || user?.email || "User";
+  const userEmail = user?.email || "";
+
+  console.log("Session data:", session);
+  console.log("Session status:", status);
 
   const navLinks = [
     { name: "Notes", path: "/", icon: Home },
-    { name: "Dashboard", path: "/dashboard", icon: Package },
+    { name: "Dashboard", path: "/", icon: Package },
   ];
 
   return (
@@ -41,9 +50,21 @@ export default function HomePage() {
           ))}
         </div>
 
-        {/* Desktop Right - Login Dialog */}
+        {/* Desktop Right - Login / User */}
         <div className="hidden md:flex items-center gap-4">
-          <LoginDialog />
+          {session?.user ? (
+            <div className="flex items-center gap-3 text-white">
+              <span className="font-medium">Hi, {session.user.name}</span>
+              <button
+                className="rounded-full bg-white/10 px-4 py-2 text-sm text-white hover:bg-white/20 transition"
+                onClick={() => signOut()}
+              >
+                Sign out
+              </button>
+            </div>
+          ) : (
+            <LoginDialog />
+          )}
         </div>
 
         {/* Mobile Menu Button */}
