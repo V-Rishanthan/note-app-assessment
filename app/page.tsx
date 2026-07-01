@@ -1,65 +1,92 @@
-import Image from "next/image";
+"use client";
 
-export default function Home() {
+import { useState } from "react";
+import Link from "next/link";
+import { Menu, X, Home, Package, StickyNote, Plus } from "lucide-react";
+import LoginDialog from "@/components/auth/LoginDialog";
+import FloatingAddButton from "@/components/common/FloatingAddButton";
+
+export default function Navbar() {
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+
+  const navLinks = [
+    { name: "Notes", path: "/", icon: Home },
+    { name: "Dashboard", path: "/dashboard", icon: Package },
+  ];
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
+    <>
+      <nav className="fixed top-0 left-0 w-full bg-indigo-500 flex items-center justify-between px-4 md:px-16 lg:px-24 xl:px-32 py-4 md:py-6 z-50">
+        {/* Logo with Note icon */}
+        <Link href="/" className="flex items-center gap-2">
+          <StickyNote className="text-white" size={28} />
+          <span className="text-2xl font-bold tracking-tight text-white">
+            NoteMe
+          </span>
+        </Link>
+
+        {/* Desktop Nav */}
+        <div className="hidden md:flex items-center gap-4 lg:gap-8">
+          {navLinks.map((link, index) => (
+            <Link
+              key={index}
+              href={link.path}
+              className="group flex items-center gap-2 text-white hover:text-gray-200 transition-colors"
             >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
+              <link.icon size={18} />
+              {link.name}
+              <div className="bg-white h-0.5 w-0 group-hover:w-full transition-all duration-300" />
+            </Link>
+          ))}
+        </div>
+
+        {/* Desktop Right - Login Dialog */}
+        <div className="hidden md:flex items-center gap-4">
+          <LoginDialog />
+        </div>
+
+        {/* Mobile Menu Button */}
+        <div className="flex items-center gap-3 md:hidden">
+          <button onClick={() => setIsMenuOpen(!isMenuOpen)}>
+            <Menu className="h-6 w-6 cursor-pointer text-white" />
+          </button>
+        </div>
+
+        {/* Mobile Menu */}
+        <div
+          className={`fixed top-0 left-0 w-full h-screen bg-white text-base flex flex-col md:hidden items-center justify-center gap-6 font-medium text-gray-800 transition-all duration-500 ${
+            isMenuOpen ? "translate-x-0" : "-translate-x-full"
+          }`}
+        >
+          <button
+            className="absolute top-4 right-4"
+            onClick={() => setIsMenuOpen(false)}
+          >
+            <X className="h-8 w-8" />
+          </button>
+
+          {navLinks.map((link, index) => (
+            <Link
+              key={index}
+              href={link.path}
+              onClick={() => setIsMenuOpen(false)}
+              className="text-xl hover:text-indigo-500 transition-colors flex items-center gap-3"
             >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+              <link.icon size={24} />
+              {link.name}
+            </Link>
+          ))}
+
+          <div onClick={() => setIsMenuOpen(false)}>
+            <LoginDialog />
+          </div>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
+      </nav>
+
+      <div className="h-24"></div>
+
+      {/* Floating Add Note Button - Below content */}
+      <FloatingAddButton />
+    </>
   );
 }
