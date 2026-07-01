@@ -2,11 +2,12 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Menu, X, Home, Package, StickyNote, Plus } from "lucide-react";
+import { Menu, X, Home, Package, StickyNote } from "lucide-react";
 import LoginDialog from "@/components/auth/LoginDialog";
 import FloatingAddButton from "@/components/common/FloatingAddButton";
+import NotesList from "@/components/NotesList";
 
-export default function Navbar() {
+export default function HomePage() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   const navLinks = [
@@ -83,9 +84,10 @@ export default function Navbar() {
         </div>
       </nav>
 
-      <div className="h-24"></div>
+      <main className="pt-28">
+        <NotesList />
+      </main>
 
-      {/* Floating Add Note Button - Below content */}
       <FloatingAddButton />
     </>
   );

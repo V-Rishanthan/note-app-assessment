@@ -13,10 +13,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus } from "lucide-react";
+import { Plus, Loader2 } from "lucide-react";
 
 export default function AddNoteDialog() {
   const [isOpen, setIsOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     title: "",
     description: "",
@@ -50,14 +51,51 @@ export default function AddNoteDialog() {
     return isValid;
   }
 
-  function handleSubmit(e: any) {
+  async function handleSubmit(e: any) {
     e.preventDefault();
-    if (validateForm()) {
-      console.log("Note created:", formData);
-      // Here you can save the note to your database
+
+    if (!validateForm()) {
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const payload = { ...formData };
+
+      const response = await fetch("/api/notes", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+
+      let data = null;
+      try {
+        data = await response.json();
+      } catch (e) {
+        console.error("Invalid JSON response from /api/notes", e);
+      }
+
+      if (!response.ok) {
+        const msg =
+          data?.message || response.statusText || "Failed to create note";
+        console.error("/api/notes error:", response.status, msg, data);
+        alert(msg);
+        setLoading(false);
+        return;
+      }
+
+      alert("Note created successfully!");
       setIsOpen(false);
       setFormData({ title: "", description: "" });
+      window.location.reload();
+    } catch (error) {
+      alert("Something went wrong");
     }
+
+    setLoading(false);
   }
 
   return (
@@ -91,6 +129,7 @@ export default function AddNoteDialog() {
               placeholder="Enter note title"
               value={formData.title}
               onChange={handleChange}
+              disabled={loading}
               className={`h-11 border-0 bg-gray-50 focus:ring-2 focus:ring-indigo-500 ${
                 errors.title ? "ring-2 ring-red-500" : ""
               }`}
@@ -112,6 +151,7 @@ export default function AddNoteDialog() {
               value={formData.description}
               onChange={handleChange}
               rows={4}
+              disabled={loading}
               className={`border-0 bg-gray-50 focus:ring-2 focus:ring-indigo-500 resize-none ${
                 errors.description ? "ring-2 ring-red-500" : ""
               }`}
@@ -130,15 +170,24 @@ export default function AddNoteDialog() {
                 setFormData({ title: "", description: "" });
                 setErrors({ title: "", description: "" });
               }}
+              disabled={loading}
               className="flex-1 h-11 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-full font-medium border-0 shadow-none"
             >
               Cancel
             </Button>
             <Button
               type="submit"
-              className="flex-1 h-11 bg-indigo-500 hover:bg-indigo-600 text-white rounded-full font-medium border-0 shadow-none"
+              disabled={loading}
+              className="flex-1 h-11 bg-indigo-500 hover:bg-indigo-600 text-white rounded-full font-medium border-0 shadow-none disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Save Note
+              {loading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                "Save Note"
+              )}
             </Button>
           </div>
         </form>

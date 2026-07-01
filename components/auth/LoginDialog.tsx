@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, ChangeEvent, FormEvent } from "react";
 import {
   Dialog,
   DialogContent,
@@ -14,30 +14,58 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { LogIn, Eye, EyeOff } from "lucide-react";
 
+interface FormData {
+  name: string;
+  email: string;
+  password: string;
+}
+
+interface Errors {
+  name: string;
+  email: string;
+  password: string;
+}
+
 export default function LoginDialog() {
   const [isOpen, setIsOpen] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [isLogin, setIsLogin] = useState(true);
-  const [formData, setFormData] = useState({
-    name: "",
-    email: "",
-    password: "",
-  });
-  const [errors, setErrors] = useState({
+  const [loading, setLoading] = useState(false);
+
+  const [formData, setFormData] = useState<FormData>({
     name: "",
     email: "",
     password: "",
   });
 
-  function handleChange(e: any) {
+  const [errors, setErrors] = useState<Errors>({
+    name: "",
+    email: "",
+    password: "",
+  });
+
+  function handleChange(e: ChangeEvent<HTMLInputElement>) {
     const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
-    setErrors((prev) => ({ ...prev, [name]: "" }));
+
+    setFormData((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+
+    setErrors((prev) => ({
+      ...prev,
+      [name]: "",
+    }));
   }
 
-  const validateForm = () => {
+  function validateForm(): boolean {
     let isValid = true;
-    const newErrors = { name: "", email: "", password: "" };
+
+    const newErrors: Errors = {
+      name: "",
+      email: "",
+      password: "",
+    };
 
     if (!isLogin && !formData.name.trim()) {
       newErrors.name = "Name is required";
@@ -47,8 +75,8 @@ export default function LoginDialog() {
     if (!formData.email.trim()) {
       newErrors.email = "Email is required";
       isValid = false;
-    } else if (formData.email) {
-      newErrors.email = "Email is invalid";
+    } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
+      newErrors.email = "Please enter a valid email";
       isValid = false;
     }
 
@@ -62,20 +90,65 @@ export default function LoginDialog() {
 
     setErrors(newErrors);
     return isValid;
-  };
+  }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  async function handleSubmit(e: any) {
     e.preventDefault();
-    if (validateForm()) {
-      console.log("Form submitted:", formData);
-      setIsOpen(false);
-      setFormData({ name: "", email: "", password: "" });
-    }
-  };
 
-  const togglePasswordVisibility = () => {
-    setShowPassword(!showPassword);
-  };
+    if (!validateForm()) return;
+
+    setLoading(true);
+
+    try {
+      if (isLogin) {
+        const response = await fetch("/api/auth/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            email: formData.email,
+            password: formData.password,
+          }),
+        });
+
+        const data = await response.json().catch(() => null);
+        if (!response.ok) {
+          alert(data?.message || "Invalid email or password");
+          return;
+        }
+
+        alert("Login successful!");
+        setIsOpen(false);
+      } else {
+        const response = await fetch("/api/auth/register", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(formData),
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          alert(data.message || "Signup failed");
+          return;
+        }
+
+        alert("Account created successfully!");
+        setIsLogin(true);
+        setIsOpen(false);
+      }
+
+      setFormData({ name: "", email: "", password: "" });
+      setErrors({ name: "", email: "", password: "" });
+    } catch (error) {
+      alert("Something went wrong");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function togglePasswordVisibility() {
+    setShowPassword((prev) => !prev);
+  }
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
@@ -99,114 +172,87 @@ export default function LoginDialog() {
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-5">
-          {/* Name Field - Only show for Sign Up */}
           {!isLogin && (
             <div className="space-y-2">
-              <Label htmlFor="name" className="text-sm font-medium">
-                Full Name
-              </Label>
+              <Label>Full Name</Label>
               <Input
-                id="name"
                 name="name"
-                type="text"
-                placeholder="John Doe"
                 value={formData.name}
                 onChange={handleChange}
-                className={`h-11 border-0 bg-gray-50 focus:ring-2 focus:ring-indigo-500 ${
-                  errors.name ? "ring-2 ring-red-500" : ""
-                }`}
+                className="h-11 bg-gray-50 border-0"
               />
               {errors.name && (
-                <p className="text-sm text-red-500 mt-1">{errors.name}</p>
+                <p className="text-sm text-red-500">{errors.name}</p>
               )}
             </div>
           )}
 
-          {/* Email Field */}
           <div className="space-y-2">
-            <Label htmlFor="email" className="text-sm font-medium">
-              Email Address
-            </Label>
+            <Label>Email Address</Label>
             <Input
-              id="email"
               name="email"
-              type="email"
-              placeholder="john@example.com"
               value={formData.email}
               onChange={handleChange}
-              className={`h-11 border-0 bg-gray-50 focus:ring-2 focus:ring-indigo-500 ${
-                errors.email ? "ring-2 ring-red-500" : ""
-              }`}
+              className="h-11 bg-gray-50 border-0"
             />
             {errors.email && (
-              <p className="text-sm text-red-500 mt-1">{errors.email}</p>
+              <p className="text-sm text-red-500">{errors.email}</p>
             )}
           </div>
 
-          {/* Password Field */}
           <div className="space-y-2">
-            <Label htmlFor="password" className="text-sm font-medium">
-              Password
-            </Label>
+            <Label>Password</Label>
+
             <div className="relative">
               <Input
-                id="password"
                 name="password"
                 type={showPassword ? "text" : "password"}
-                placeholder="••••••••"
                 value={formData.password}
                 onChange={handleChange}
-                className={`h-11 pr-11 border-0 bg-gray-50 focus:ring-2 focus:ring-indigo-500 ${
-                  errors.password ? "ring-2 ring-red-500" : ""
-                }`}
+                className="h-11 bg-gray-50 border-0 pr-10"
               />
+
               <button
                 type="button"
                 onClick={togglePasswordVisibility}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                className="absolute right-3 top-1/2 -translate-y-1/2"
               >
                 {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
               </button>
             </div>
+
             {errors.password && (
-              <p className="text-sm text-red-500 mt-1">{errors.password}</p>
+              <p className="text-sm text-red-500">{errors.password}</p>
             )}
           </div>
 
-          {/* Submit Button */}
           <Button
             type="submit"
-            className="w-full h-11 bg-indigo-500 hover:bg-indigo-600 text-white rounded-full font-medium mt-2 border-0 shadow-none"
+            disabled={loading}
+            className="w-full h-11 bg-indigo-500 hover:bg-indigo-600 text-white rounded-full"
           >
-            {isLogin ? "Login" : "Sign Up"}
+            {loading ? "Loading..." : isLogin ? "Login" : "Create Account"}
           </Button>
 
-          {/* Toggle between Login and Sign Up */}
-          <div className="text-center text-sm pt-2">
+          <div className="text-center text-sm">
             {isLogin ? (
-              <p className="text-gray-600">
-                Don't have an account?{" "}
+              <p>
+                Don't have an account?
                 <button
                   type="button"
-                  onClick={() => {
-                    setIsLogin(false);
-                    setErrors({ name: "", email: "", password: "" });
-                  }}
-                  className="text-indigo-500 hover:text-indigo-600 font-medium hover:underline transition-colors"
+                  onClick={() => setIsLogin(false)}
+                  className="text-indigo-500"
                 >
                   Sign Up
                 </button>
               </p>
             ) : (
-              <p className="text-gray-600">
-                Already have an account?{" "}
+              <p>
+                Already have an account?
                 <button
                   type="button"
-                  onClick={() => {
-                    setIsLogin(true);
-                    setErrors({ name: "", email: "", password: "" });
-                  }}
-                  className="text-indigo-500 hover:text-indigo-600 font-medium hover:underline transition-colors"
+                  onClick={() => setIsLogin(true)}
+                  className="text-indigo-500"
                 >
                   Login
                 </button>
